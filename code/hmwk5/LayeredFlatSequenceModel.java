@@ -869,7 +869,7 @@ public class LayeredFlatSequenceModel implements Serializable {
     System.out.println("z in question is " + mod._c._z[0][3].get(2));
     System.out.println(Arrays.toString(cts));
     int total = cts[8];
-    if(Math.abs(total - 87000) < 50)
+    if(Math.abs(total - 87000) < 500)
        System.out.println("test without subtraction passed.");
     else
       System.err.println("test failed, expected something close to 87000 but got " + total);
