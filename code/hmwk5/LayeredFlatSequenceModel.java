@@ -31,13 +31,13 @@ import java.util.concurrent.TimeUnit;
 public class LayeredFlatSequenceModel implements Serializable {
 
   private static final long serialVersionUID = 2L;
-  
-  
+
+
   private class GibbsDoer implements Runnable {
       int _start;
       int _end;
       long _changes = 0;
-      
+
       public void run() {
         _changes = sampleRange(_start, _end);
       }
@@ -46,18 +46,18 @@ public class LayeredFlatSequenceModel implements Serializable {
     private class TestDoer implements Runnable {
       int _doc;
       double [] _res;
-      
+
       public TestDoer(int i) {
         _doc = i;
       }
-      
+
       public void run() {
         _res = testOnDocFullPpl(_doc);
         //_res = testOnDocFullPplExact(_doc, _wordTopicMarginal);
         System.out.println(_doc + "\t" + _res[0] + "\t" + _res[1]);
       }
     }
-    
+
   //Model information:
   //state index zero is special start-of-sentence state
   int [] _branchingFactors; //dims: depth
@@ -70,65 +70,69 @@ public class LayeredFlatSequenceModel implements Serializable {
 //  int [] _NUMSTATES = new int [] {4, 6, 8, 13}; //number of latent state values at each layer
 //  boolean [][] _transitionTemplate = new boolean[][] {{true, false,false,false},{false, true, false,false},{false,false,true,false}, {false,false,false,true}}; //dims: MUST BE _NUMLAYERS x _NUMLAYERS
 //  boolean [] _productionTemplate = new boolean[] {false, false, false, true}; //dims: MUST BE _NUMLAYERS
-  
-  //one-layer model:
+
+  // // one-layer model:
   int _NUMLAYERS = 1;
   int [] _NUMSTATES = new int [] {13};
   boolean [][] _transitionTemplate = new boolean[][] {{true}}; //dims: MUST BE _NUMLAYERS x _NUMLAYERS
   boolean [] _productionTemplate = new boolean[] {true}; //dims: MUST BE _NUMLAYERS
-  
-  
-  
+
+  //
+  // int _NUMLAYERS = 2;
+  // int [] _NUMSTATES = new int [] {40, 40};
+  // boolean [][] _transitionTemplate = new boolean [][] {{true, false}, {false, true}};
+  // boolean [] _productionTemplate = new boolean [] {false, true};
+
   //assumed internal links are always from layer i to layer i+1
-  
+
   TIntDoubleHashMap [][][] _forward; //dims: LAYERi-1 x LAYERi x state
   TIntDoubleHashMap []  _startState; //dims: LAYER
   TIntDoubleHashMap [][][] _backward; //dims: LAYERi+1 x LAYERi x state
   TIntDoubleHashMap [][] _wordToState; //dims: LAYER x state
   TIntDoubleHashMap [][] _down; //dims: LAYER-1 x state
   TIntDoubleHashMap [][] _up; //dims: LAYER-1 x state
-  
+
   double [][] _marginal; //dims: LAYER x state, gives total counts in each state
-  
-  
-  double _alpha = 10.0; //pseudo-counts to add to each state  
+
+
+  double _alpha = 10.0; //pseudo-counts to add to each state
 
   LayeredCorpus _c;
-  
+
   Random _r = new Random();
-    
+
   //threading:
   private int _NUMTHREADS = -1;
   private int[] _THREADBREAKS = null; //inclusive doc indices where threads *end* (initial thread starts
               //at 0 implicitly)
-  
+
   //training config:
   protected int _NUMITERATIONS = -1;
-  
+
   //testing config:
   protected int _NUMPARTICLES = -1;
   private int _MAXTESTDOCSIZE = -1;
-  
+
   private int _numSkipWords = 0;
-  
+
   public LayeredFlatSequenceModel(String configFile) throws Exception {
     _c = new LayeredCorpus(_NUMLAYERS);
     readConfigFile(configFile);
   }
-  
-  
+
+
   public int get_NUMLAYERS() {
     return _NUMLAYERS;
   }
-  
+
   public void set_NUMLAYERS(int _NUMLAYERS) {
     this._NUMLAYERS = _NUMLAYERS;
   }
-  
+
   public int get_NUMPARTICLES() {
     return _NUMPARTICLES;
   }
-  
+
   public void set_NUMPARTICLES(int _NUMPARTICLES) {
     this._NUMPARTICLES = _NUMPARTICLES;
   }
@@ -142,7 +146,7 @@ public class LayeredFlatSequenceModel implements Serializable {
   public void set_MAXTESTDOCSIZE(int _MAXTESTDOCSIZE) {
     this._MAXTESTDOCSIZE = _MAXTESTDOCSIZE;
   }
-  
+
   public int get_VOCABSIZE() {
     return _c._VOCABSIZE;
   }
@@ -191,10 +195,10 @@ public class LayeredFlatSequenceModel implements Serializable {
     this._NUMITERATIONS = _NUMITERATIONS;
   }
 
-    
+
   //returns offset
   private int setThreadBreaks(int numPartitions, int partition) {
-    
+
     _THREADBREAKS = new int[_NUMTHREADS];
     long approxToks = _c._NUMTOKENS / (_NUMTHREADS * numPartitions);
     long skipToks = partition * approxToks * _NUMTHREADS;
@@ -216,7 +220,7 @@ public class LayeredFlatSequenceModel implements Serializable {
       _THREADBREAKS[_NUMTHREADS - 1] = _c._NUMDOCS - 1;
     return j;
   }
-  
+
   private void setThreadBreaks() {
     setThreadBreaks(1, 0);
 //    _THREADBREAKS = new int[_NUMTHREADS];
@@ -241,7 +245,7 @@ public class LayeredFlatSequenceModel implements Serializable {
     }
     return out;
   }
-  
+
   //config file has lines of form <param-name without underscore>\t<integer value> [<integer value> ...]
   public void readConfigFile(String inFile) throws Exception {
     System.out.println("reading config file.");
@@ -281,7 +285,7 @@ public class LayeredFlatSequenceModel implements Serializable {
     brIn.close();
   }
 
-  
+
   protected TIntDoubleHashMap aggregateCounts(TIntArrayList occurs) {
     TIntDoubleHashMap out = new TIntDoubleHashMap();
     TIntIterator it = occurs.iterator();
@@ -291,7 +295,7 @@ public class LayeredFlatSequenceModel implements Serializable {
     }
     return out;
   }
-  
+
   //scans doc, resampling each variable.  Not used at test time.
   //returns number of changes
   protected int sampleDoc(int docId) {
@@ -304,7 +308,7 @@ public class LayeredFlatSequenceModel implements Serializable {
         double chg = _c._changeFactor[docId][layer].get(i);
         if(_r.nextDouble() > chg) { //skip it
           scratchZs[layer].set(i, zs[layer].get(i));
-          continue;       
+          continue;
         }
         int newZ = sampleZ(docId, layer, i, true, true);
         chg = _c.lambda * chg;
@@ -318,11 +322,11 @@ public class LayeredFlatSequenceModel implements Serializable {
     }
     return changes;
   }
-  
+
   private static class MarkovBlanketContainer {
     TIntDoubleHashMap [] sbts;
   }
-  
+
   //Returns the SBTs and amounts to subtract for the given latent variable
   public MarkovBlanketContainer getMarkovBlanket(int doc, int layer, int pos, boolean useWord) {
     int w = _c._docs[doc].get(pos);
@@ -355,7 +359,7 @@ public class LayeredFlatSequenceModel implements Serializable {
     if(useWord) {
       //word:
       if(_productionTemplate[layer]) {
-        TIntDoubleHashMap sbtWord =this._wordToState[layer][w]; 
+        TIntDoubleHashMap sbtWord =this._wordToState[layer][w];
           sbts.add(this._wordToState[layer][w]);
       }
     }
@@ -370,7 +374,7 @@ public class LayeredFlatSequenceModel implements Serializable {
         sbts.add(this._down[layer-1][_c._z[doc][layer-1].get(pos)]);
       }
     }
-    
+
     MarkovBlanketContainer out = new MarkovBlanketContainer();
     out.sbts = new TIntDoubleHashMap[sbts.size()];
     for(int i=0; i<sbts.size(); i++) {
@@ -378,28 +382,62 @@ public class LayeredFlatSequenceModel implements Serializable {
     }
     return out;
   }
-  
-  
+
+
   public int sampleZ(int doc, int layer, int pos, boolean useWord, boolean sub) {
     MarkovBlanketContainer mbc = getMarkovBlanket(doc, layer, pos, useWord);
- 
+
     int curZ = _c._z[doc][layer].get(pos);
 
-    throw new Exception("Implement me.");
-    //Given the sampler-state's counts in the MarkovBlanketContainer,
-    //compute the sampling distribution for the variable at the given pos/layer/doc.
-    //product vector into a distribution, and return a sample from it.
-    //Of the arguments to this function, you will only need to use "sub" which says
-    //whether or not to subtract the count corresponding to the current sampler state,
-    //which is set to the variable curZ.
-    //The number of states at this layer is in the variable _NUMSTATES[layer].
-    //The marginal counts for a given state are _marginal[layer][i]
-    //You should not need to use any other class fields or methods.
-    return -1;
+    double [] z_distribution = new double[_NUMSTATES[layer]];
+
+    for (int i = 0; i < _NUMSTATES[layer]; i++) {
+      double p_z = 1.0;
+      double subtract_val;
+
+      if (sub && (curZ==i)) {
+        subtract_val = 1.0;
+      } else {
+        subtract_val = 0.0;
+      }
+
+      boolean numerator_only = true;
+
+      for(int j=0; j<mbc.sbts.length; j++) {
+        if(mbc.sbts[j] == null) {
+          continue;
+        }
+        if (numerator_only) {
+          p_z *= (mbc.sbts[j].get(i) + _alpha/_NUMSTATES[layer] - subtract_val);
+          numerator_only = false;
+        }
+        else {
+          p_z *= ((mbc.sbts[j].get(i) + _alpha/_NUMSTATES[layer] - subtract_val) / (_alpha + _marginal[layer][i] - subtract_val));
+        }
+      }
+      z_distribution[i] = p_z;
+    }
+
+    double sum = 0.0;
+    for(int i = 0; i < z_distribution.length; i++) {
+      sum += z_distribution[i];
+    }
+    for(int i = 0; i < z_distribution.length; i++) {
+      z_distribution[i] = z_distribution[i] / sum;
+    }
+
+    double rand_number = Math.random();
+
+    int index = 0;
+    while (rand_number > z_distribution[index]) {
+      rand_number -= z_distribution[index++];
+    }
+
+    return index;
   }
-  
+
   private long sampleRange(int start, int end) {
-    
+
     long chg = 0;
     for(int i=start; i<=end; i++) {
       chg += (long)sampleDoc(i);
@@ -407,7 +445,7 @@ public class LayeredFlatSequenceModel implements Serializable {
 
     return chg;
   }
-  
+
   //if scratch, copies z into scratch
   public void initZ(TIntArrayList [] ds, int [] maxVal, boolean scratch) {
     TIntArrayList [][] zs;
@@ -437,11 +475,11 @@ public class LayeredFlatSequenceModel implements Serializable {
     TIntDoubleHashMap [] end; //LAYER
     TIntDoubleHashMap [][] word; //LAYER x VOCAB
   }
-  
+
   //doesn't create new hashmaps, only arrays
   private AggregatedCounts getInitializedAggregator() {
     AggregatedCounts ac = new AggregatedCounts();
-    
+
     ac.forward = new TIntDoubleHashMap[_NUMLAYERS][_NUMLAYERS][];
     ac.backward = new TIntDoubleHashMap[_NUMLAYERS][_NUMLAYERS][];
     ac.up = new TIntDoubleHashMap[_NUMLAYERS][];
@@ -464,13 +502,13 @@ public class LayeredFlatSequenceModel implements Serializable {
     }
     return ac;
   }
-  
+
   public void createAdjPut(TIntDoubleHashMap [] a, int idx, int j, double val) {
     if(a[idx]==null)
       a[idx] = new TIntDoubleHashMap();
     a[idx].adjustOrPutValue(j, val, val);
   }
-  
+
   public AggregatedCounts aggregateCounts(TIntArrayList [][] zs, TIntArrayList [] ws) {
     AggregatedCounts ac = getInitializedAggregator();
     for(int doc=0; doc<zs.length; doc++) {
@@ -487,8 +525,8 @@ public class LayeredFlatSequenceModel implements Serializable {
           for(int j=0; j<_NUMLAYERS; j++) {
             for(int k=0; k<_NUMLAYERS; k++) {
               if(this._transitionTemplate[j][k]) {
-                createAdjPut(ac.forward[j][k], z[j].get(i), z[k].get(i+1), 1.0); 
-                createAdjPut(ac.backward[k][j], z[k].get(i+1), z[j].get(i), 1.0); 
+                createAdjPut(ac.forward[j][k], z[j].get(i), z[k].get(i+1), 1.0);
+                createAdjPut(ac.backward[k][j], z[k].get(i+1), z[j].get(i), 1.0);
               }
             }
           }
@@ -512,10 +550,10 @@ public class LayeredFlatSequenceModel implements Serializable {
     }
     return ac;
   }
-  
-  
-  
-    
+
+
+
+
   /**
    * reads the corpus and initializes zs and model
    * @param inFile
@@ -530,12 +568,12 @@ public class LayeredFlatSequenceModel implements Serializable {
     updateModel(_c._z);
     return toks;
   }
-  
+
   private int gibbsPass() {
     return gibbsPass(0);
   }
-  
-    private int gibbsPass(int offset) { 
+
+    private int gibbsPass(int offset) {
       int changes= 0 ;
       GibbsDoer [] gds = new GibbsDoer[_NUMTHREADS];
       long stTime = System.currentTimeMillis();
@@ -555,7 +593,7 @@ public class LayeredFlatSequenceModel implements Serializable {
             terminated = e.awaitTermination(60,  TimeUnit.SECONDS);
           }
           catch (InterruptedException ie) {
-            
+
           }
         }
         for(int i=0; i<_NUMTHREADS; i++) {
@@ -567,8 +605,8 @@ public class LayeredFlatSequenceModel implements Serializable {
       //System.out.println(Arrays.toString(_topicMarginal));
       return changes;
     }
-  
-    
+
+
   //returns array of amt_i
   //such that if we divide leaf counts by amt_i, we get smoothing with marginal P(z)
     //(see paper)
@@ -580,17 +618,17 @@ public class LayeredFlatSequenceModel implements Serializable {
     }
     return out;
   }
-  
-  
 
-  
+
+
+
   private static double [] ones(int len) {
     double [] out = new double[len];
     Arrays.fill(out, 1.0);
     return out;
   }
 
-  
+
   /**
    * Updates the model given the topic assignments (_z) and divides by marginal for next sampling pass
    */
@@ -601,7 +639,7 @@ public class LayeredFlatSequenceModel implements Serializable {
 //      if(_c._changeFactor != null)
 //        System.out.println("second doc chg (layer 0): " + _c._changeFactor[1][0].toString());
       AggregatedCounts ac = this.aggregateCounts(zs, _c._docs);
-      
+
       this._startState  = new TIntDoubleHashMap[_NUMLAYERS];
       this._wordToState  = new TIntDoubleHashMap[_NUMLAYERS][];
       this._forward  = new TIntDoubleHashMap[_NUMLAYERS][_NUMLAYERS][];
@@ -609,7 +647,7 @@ public class LayeredFlatSequenceModel implements Serializable {
       this._up  = new TIntDoubleHashMap[_NUMLAYERS][];
       this._down  = new TIntDoubleHashMap[_NUMLAYERS][];
       this._marginal = new double[_NUMLAYERS][];
-      
+
       for(int i=0; i<_NUMLAYERS;i++) {
         _marginal[i] = new double[_NUMSTATES[i]];
         this._startState[i] = ac.start[i];
@@ -634,24 +672,24 @@ public class LayeredFlatSequenceModel implements Serializable {
       for(int i=0; i<_marginal.length;i++)
         System.out.println("marginal[" + i + "]: " + Arrays.toString(_marginal[i]));
     }
-    
-    
-    
-    
-    
+
+
+
+
+
     public void trainModel(int iterations, String outFile) throws Exception {
       trainModel(iterations, outFile, false);
     }
-    
+
     public void translateStates(TIntArrayList [] zs, TIntIntHashMap trans) {
-      for(int i=0; i<zs.length; i++) { 
+      for(int i=0; i<zs.length; i++) {
         for(int j=0; j<zs[i].size(); j++) {
           zs[i].set(j, trans.get(zs[i].get(j)));
         }
       }
     }
-    
-    
+
+
     /**
      * Trains the model for a specified number of iterations.
      *
@@ -676,10 +714,12 @@ public class LayeredFlatSequenceModel implements Serializable {
         updateModel(_c._scratchZ);
         _c._z = _c._scratchZ;
       }
+      System.out.println("Print C. Z: \n");
+      System.out.println(_c._z);
       done = true;
     }
   }
-  
+
   public void writeModel(String outFile) throws Exception {
     TIntDoubleHashMap [][] sbtW = this._wordToState;
     TIntDoubleHashMap [][][] sbtF = this._forward;
@@ -703,7 +743,7 @@ public class LayeredFlatSequenceModel implements Serializable {
     _up = sbtU;
     _down = sbtD;
   }
-  
+
   public static LayeredFlatSequenceModel readModel(String inFile) throws Exception {
     ObjectInputStream ois = new ObjectInputStream(new FileInputStream(inFile));
     LayeredFlatSequenceModel out = (LayeredFlatSequenceModel) ois.readObject();
@@ -711,11 +751,11 @@ public class LayeredFlatSequenceModel implements Serializable {
     out.updateModel(out._c._z);
     return out;
   }
-  
-  
-  
-  
-  
+
+
+
+
+
   //tests on a single document using left-to-right method
   //word topic marginal (i.e. P(topic) computed from P(topic, word)) is supplied to ensure evaluated distribution sums to one
   public double [] testOnDocFullPpl(int doc) {
@@ -730,16 +770,16 @@ public class LayeredFlatSequenceModel implements Serializable {
       }
       for(int i=0; i<words.size(); i++) {
         int w = words.get(i);
-        double p = 0.0;           
-        
+        double p = 0.0;
+
         //sample this state forward:
         for(int pass=0; pass<3; pass++)
           for(int layer=0;layer<_NUMLAYERS;layer++) {
             _c._z[doc][layer].set(i, this.sampleZ(doc, layer, i, false, false));
           }
-        
+
         if(_c._pWord[w]>0.0) {
-          
+
           //test on this word:
           double [] pOut = new double[this.get_VOCABSIZE()];
           double normalizer = 0.0;
@@ -801,22 +841,22 @@ public class LayeredFlatSequenceModel implements Serializable {
     }
     return new double [] {LL, numWords};
   }
-  
+
   public static void train(String inputFile, String outputFile, String configFile) throws Exception {
     LayeredFlatSequenceModel sbtsm = new LayeredFlatSequenceModel(configFile);
     sbtsm.initializeForCorpus(inputFile, sbtsm._NUMSTATES);
     sbtsm.trainModel(sbtsm._NUMITERATIONS, outputFile);
     sbtsm.writeModel(outputFile);
   }
-  
-    
-  
+
+
+
   //computes log likelihood of model using left-to-right method
   //returns {ppl, number of tested words}
   //numDocs is number in test file
   //maxDocs is number actually tested (starting from the beginning of the file)
   public static double [] testModel(String modelFile, String testFile, int numDocs, int maxDocs, String configFile) throws Exception {
-    
+
     LayeredFlatSequenceModel sbtsm = readModel(modelFile);
     sbtsm.readConfigFile(configFile);
 
@@ -841,7 +881,7 @@ public class LayeredFlatSequenceModel implements Serializable {
           terminated = e.awaitTermination(60,  TimeUnit.SECONDS);
         }
         catch (InterruptedException ie) {
-          
+
         }
     }
     for(int i=0; i<tds.length; i++) {
@@ -852,13 +892,13 @@ public class LayeredFlatSequenceModel implements Serializable {
     }
     return new double [] {LL, numWords};
   }
-  
+
   public static void test(String modelFile, String inputFile, int numDocsInFile, int numDocsToTest, String configFile) throws Exception {
     double [] ll = testModel(modelFile, inputFile, numDocsInFile, numDocsToTest, configFile);
     System.out.println("Test LL: " + Arrays.toString(ll));
     System.out.println("ppl: " + Math.exp(-ll[0]/ll[1]));
   }
-  
+
   public static void testSampleZ() throws Exception {
     LayeredFlatSequenceModel mod = readModel("test_model.dat");
     int [] cts = new int[mod._NUMSTATES[3]];
@@ -884,7 +924,7 @@ public class LayeredFlatSequenceModel implements Serializable {
     else
       System.err.println("test failed, expected something close to 74350 but got " + total);
   }
-   
+
   public static void main(String[] args) throws Exception {
     if(args.length > 0 && args[0].equalsIgnoreCase("train")) {
       if(args.length != 4) {
@@ -907,5 +947,5 @@ public class LayeredFlatSequenceModel implements Serializable {
       System.err.println("Usage: <train|test> <args...>");
     }
   }
-  
+
 }
